@@ -1,6 +1,3 @@
-# next activity is to draw other player stacks in diff positions on the screen
-# also include a check for a violation of max players
-
 import pygame
 import random
 import sys
@@ -120,20 +117,65 @@ def generate_deck(pool, n):
 
     deck = []
     for i in range(n):
-        deck.append(pool[random.randint(0, len(pool) - 1)])
+        deck.append((pool[random.randint(0, len(pool) - 1)]))
     return deck
+
+
+def render_turned_deck(display, deck, ctr, orient):
+    """
+    Renders a deck of turned cards
+    Used to render other player decks
+    Can orient to accomodate to screen corners
+    """
+
+    if not deck:
+        return
+
+    offset = [
+        50 if orient == 0 or orient == 2 else 0,
+        50 if orient == 1 or orient == 3 else 0
+    ]
+
+    oriented_card = turned[orient]
+
+    total_width = oriented_card.get_width() + ((len(deck) - 1) * offset[0])
+    total_height = oriented_card.get_height() + ((len(deck) - 1) * offset[1])
+
+    deck_draw_rect = pygame.Rect(
+        0,
+        0,
+        total_width,
+        total_height
+    )
+
+    deck_draw_rect.center = ctr
+
+    for i in range(len(deck)):
+        deck[i].dest.size = oriented_card.get_size()
+        deck[i].dest.topleft = (
+            deck_draw_rect.topleft[0] + (i * offset[0]),
+            deck_draw_rect.topleft[1] + (i * offset[1])
+        )
+
+        display.blit(oriented_card, deck[i].dest)
+
+        pygame.draw.rect(display, (255, 0, 0), deck[i].dest, 2)
+
+    pygame.draw.rect(display, (0, 0, 255), deck_draw_rect, 2)
+    pygame.draw.circle(display, (0, 0, 255), ctr, 5)
 
 
 def render_deck(display, deck, ctr):
     """
     Renders the given set of cards to the display, centered at ctr.
+    Can also apply rotation to accomodate for left + right edges and such.
     """
 
     # ignore empty deck
     if not deck:
         return
 
-    # position difference between drawing of current card and the next
+    # offset between cards drawn
     offset = (50, 0)
 
     # assume first card in deck has the dimensions of the rest
@@ -166,7 +208,10 @@ def render_deck(display, deck, ctr):
 
         display.blit(deck[i].image, deck[i].dest)
 
-        pygame.draw.rect(display, (0, 0, 0), deck[i].dest, 2)
+        pygame.draw.rect(display, (0, 255, 0), deck[i].dest, 2)
+
+    pygame.draw.rect(display, (0, 255, 0), deck_draw_rect, 2)
+    pygame.draw.circle(display, (0, 255, 0), ctr, 5)
 
 
 def get_clicked_deck_card(deck) -> Card:
@@ -217,6 +262,17 @@ def move(i, a, b):
 
 
 table = import_image('Table_0')
+
+# we have 4 rotated versions of the turned deck card in
+# order to draw enemy player decks at diff positions of the screen
+# enemy decks should be drawn clockwise
+turned = [
+    import_image('Deck'),
+    pygame.transform.rotate(import_image('Deck', 0.3), 90),     # to left
+    pygame.transform.rotate(import_image('Deck', 0.3), 180),    # to top
+    pygame.transform.rotate(import_image('Deck', 0.3), 270),    # to right
+]
+
 cards = import_cards()
 
 player_decks = [
@@ -272,8 +328,20 @@ while True:
     # draw stack
     render_deck(display, stack, display.get_rect().center)
 
-    # draw player decks
-    for deck in player_decks:
-        render_deck(display, deck, display.get_rect().midbottom)
+    # THIS IS UNFINISHED!
+    # make the game auto-pick draw location of other players
+
+    # draw my deck
+    render_deck(
+        display,
+        player_decks[my_player_number],
+        display.get_rect().midbottom
+    )
+
+    # draw other decks
+    render_turned_deck(display, player_decks[1], display.get_rect().midleft, 1)
+    render_turned_deck(display, player_decks[2], display.get_rect().midtop, 2)
+    render_turned_deck(
+        display, player_decks[3], display.get_rect().midright, 3)
 
     pygame.display.update()
