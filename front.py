@@ -1,3 +1,6 @@
+# todo: fix player cards dest set incorrectly due to same card object in diff decks
+# work on: animations
+
 import pygame
 import random
 import sys
@@ -42,7 +45,7 @@ INVALID_START_KINDS = [
 
 MAX_PLAYERS = 4
 
-display = pygame.display.set_mode(DISPLAY_SIZE)
+INTERPOLATION_TIME = 0.5
 
 
 class Card:
@@ -58,6 +61,28 @@ class Card:
             image.get_width(),
             image.get_height()
         )
+
+        # used for interpolation
+        self.target_dest = self.dest.copy()
+
+        # is this card allowed to move by itself?
+        self.override_pos = False
+
+    def update(self, dt=1):
+        # constantly move towards target dest
+        self.dest.x = lerp(
+            self.dest.x,
+            self.target_dest.x,
+            INTERPOLATION_TIME
+        )
+
+        self.dest.y = lerp(
+            self.dest.y,
+            self.target_dest.y,
+            INTERPOLATION_TIME
+        )
+
+        # print(f"{self.dest.x}, {self.dest.y}")
 
 
 def import_image(name, scale=1):
@@ -151,14 +176,15 @@ def render_turned_deck(display, deck, ctr, orient):
     deck_draw_rect.center = ctr
 
     for i in range(len(deck)):
-        deck[i].dest.size = oriented_card.get_size()
+        # if card allowed to move by itself, skip positioning it
+        # if deck[i].override_pos:
+        deck[i].dest.size = oriented_card.get_size()        # stick to using the target dest ONLY this isn't ok 
         deck[i].dest.topleft = (
             deck_draw_rect.topleft[0] + (i * offset[0]),
             deck_draw_rect.topleft[1] + (i * offset[1])
         )
 
         display.blit(oriented_card, deck[i].dest)
-
         pygame.draw.rect(display, (255, 0, 0), deck[i].dest, 2)
 
     pygame.draw.rect(display, (0, 0, 255), deck_draw_rect, 2)
@@ -261,6 +287,14 @@ def move(i, a, b):
     b.append(taken)
 
 
+def lerp(a, b, t):
+    return a * (1 - t) + (b * t)
+
+
+display = pygame.display.set_mode(DISPLAY_SIZE)
+clock = pygame.time.Clock()
+dt = 0
+
 table = import_image('Table_0')
 
 # we have 4 rotated versions of the turned deck card in
@@ -289,6 +323,7 @@ stack = [
     cards[pick_start_card(cards)]
 ]
 
+print(lerp(0, 1, 0.5))
 
 while True:
     # we need pygame.event.get() for anything event-related to be processed
@@ -322,8 +357,12 @@ while True:
     if pygame.key.get_pressed()[pygame.K_ESCAPE]:
         sys.exit()
 
+    # update display
     display.fill((0, 0, 0))
     display.blit(table, (0, 0))
+
+    # update clock, get dt in ms
+    dt = clock.tick(60) / 1000
 
     # draw stack
     render_deck(display, stack, display.get_rect().center)
@@ -338,10 +377,20 @@ while True:
         display.get_rect().midbottom
     )
 
+    # animate any cards i hover over
+    hovered_card = get_clicked_deck_card(my_deck)
+    if my_deck[hovered_card]:
+        my_deck[hovered_card].target_dest.y -= 20
+
     # draw other decks
     render_turned_deck(display, player_decks[1], display.get_rect().midleft, 1)
     render_turned_deck(display, player_decks[2], display.get_rect().midtop, 2)
     render_turned_deck(
         display, player_decks[3], display.get_rect().midright, 3)
+
+    # update all deck cards
+    for deck in player_decks:
+        for card in deck:
+            card.update(dt)
 
     pygame.display.update()
