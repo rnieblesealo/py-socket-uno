@@ -40,6 +40,10 @@ def send(msg):
     client.send(msg)
 
 def recv() -> str:
+    """
+    Receive utf-8 string from server
+    """
+
     if client is None:
         return ''
 
@@ -51,3 +55,20 @@ def recv() -> str:
     msg = client.recv(msg_len).decode(FORMAT)
 
     return msg
+
+def recv_obj():
+    """
+    Receive object from server
+    """
+
+    if client is None:
+        return None
+
+    obj_size = None
+    while not obj_size:
+        obj_size = client.recv(HEADER).decode(FORMAT)
+
+    obj_size = int(obj_size)
+    obj = client.recv(obj_size)
+
+    return obj

@@ -1,4 +1,5 @@
 import threading
+import pickle
 import server
 import client
 
@@ -44,7 +45,9 @@ if is_host:
     server.start_game()
 
     while True:
+        # tell the current player that it's their turn and send them deck info
         server.send(server.player_turn, 'turn')
+        server.send_obj(server.player_turn, server.player_decks[server.player_turn])
 
 else:
     client.init()
@@ -54,6 +57,17 @@ else:
     while True:
         match(client.recv()):
             case 'turn':
+                # get info about my deck
+                my_deck = client.recv_obj()
+
+                if my_deck is None:
+                    # this shouldn't happen, but TODO add error handing for this
+                    continue
+
+                print("\nDeck: ")
+                for card in pickle.loads(my_deck):
+                    print(card)
+
                 sel = await_input(
                     msg='Enter your play: ',
                     valid_entries=('')

@@ -1,6 +1,9 @@
+import sys
 import socket
 import random
+import pickle
 import threading
+
 
 # -- connectivity --
 
@@ -79,6 +82,19 @@ def send(i, msg):
 
     conns[i][0].send(len_msg)
     conns[i][0].send(msg)
+
+def send_obj(i, obj):
+    """
+    Send object to specific client connection
+    """
+
+    obj = pickle.dumps(obj)
+
+    len_msg = str(sys.getsizeof(obj)).encode(FORMAT)
+    len_msg += b' ' * (HEADER - len(len_msg))
+
+    conns[i][0].send(len_msg)
+    conns[i][0].send(obj)
 
 # -- game --
 
