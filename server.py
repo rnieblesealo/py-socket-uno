@@ -17,6 +17,7 @@ DISCONNECT_MESSAGE = '!DISCONNECT'
 server = None
 conns = []
 
+
 def init():
     """
     Initialize host server
@@ -26,6 +27,7 @@ def init():
 
     server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     server.bind(ADDRESS)
+
 
 def handle_client(conn, addr):
     """
@@ -49,6 +51,7 @@ def handle_client(conn, addr):
 
     # conn.close()
 
+
 def get_connections():
     """
     Listen for connections and store their info in conns
@@ -70,6 +73,7 @@ def get_connections():
 
         thread.start()
 
+
 def send(i, msg):
     """
     Send message to specified client connection
@@ -82,6 +86,7 @@ def send(i, msg):
 
     conns[i][0].send(len_msg)
     conns[i][0].send(msg)
+
 
 def send_obj(i, obj):
     """
@@ -97,6 +102,7 @@ def send_obj(i, obj):
     conns[i][0].send(obj)
 
 # -- game --
+
 
 PLAYERS = 4
 START_CARDS = 7
@@ -130,11 +136,13 @@ card_stack = None
 player_turn = 0
 player_decks = []
 
+
 def make_card(kind, value) -> tuple[str, str]:
     return (
         kind,
         value
     )
+
 
 def make_pool() -> list:
     """
@@ -157,6 +165,7 @@ def make_pool() -> list:
 
     return pool
 
+
 def move_card(src, dest, index=-1):
     """
     Move a card from a source to a destination
@@ -166,6 +175,7 @@ def move_card(src, dest, index=-1):
     taken = src.pop() if index == -1 else src.pop(index)
     dest.append(taken)
 
+
 def draw_cards(src, dest, amt):
     """
     Moves @amt cards from the top of the source to the dest
@@ -173,6 +183,7 @@ def draw_cards(src, dest, amt):
 
     for i in range(amt):
         dest.append(src.pop())
+
 
 def start_game():
     """
@@ -207,6 +218,7 @@ def start_game():
 
     print('\n---')
 
+
 def is_valid_play(top, card):
     """
     Evaluates a top card against selected card
@@ -221,7 +233,18 @@ def is_valid_play(top, card):
 
     return True in conditions
 
-# -- logging functions --
+
+def get_playable_cards(top, deck):
+    """
+    Check all cards in deck against is_valid_play, adding playable indices to a list
+    """
+
+    playables = []
+    for i in range(len(deck)):
+        if is_valid_play(top, deck[i]):
+            playables.append(i)
+    return playables
+
 
 def show_deck(n):
     print(f"\nPlayer {n}'s deck: ")

@@ -9,6 +9,7 @@ DISCONNECT_MESSAGE = "!DISCONNECT"
 
 client = None
 
+
 def init():
     """
     Initializes client socket
@@ -16,8 +17,19 @@ def init():
 
     global client
 
-    client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    client.connect(ADDRESS)
+    # socket behavior is undefined if connect() fails
+    # we need to re-create it before retrying!
+
+    while True:
+        try:
+            client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            client.connect(ADDRESS)
+            break
+        except socket.error:
+            continue
+
+    print('Connection successful!')
+
 
 def send(msg):
     """
@@ -39,6 +51,7 @@ def send(msg):
     client.send(len_msg)
     client.send(msg)
 
+
 def recv() -> str:
     """
     Receive utf-8 string from server
@@ -55,6 +68,7 @@ def recv() -> str:
     msg = client.recv(msg_len).decode(FORMAT)
 
     return msg
+
 
 def recv_obj():
     """
