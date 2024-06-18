@@ -19,12 +19,12 @@ def init():
     Initialize host server
     """
 
-    global r
+    global server
 
     server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     server.bind(ADDRESS)
 
-def handle_client(conn):
+def handle_client(conn, addr):
     """
     Listen for messages from a given connection
     """
@@ -40,11 +40,11 @@ def handle_client(conn):
         msg_len = int(msg_len)
         msg = conn.recv(msg_len).decode(FORMAT)
 
-        if (msg == DISCONNECT_MESSAGE):
-            connected = False
-            break
+        # if (msg == DISCONNECT_MESSAGE):
+        #     connected = False
+        #     break
 
-    conn.close()
+    # conn.close()
 
 def get_connections():
     """
@@ -62,9 +62,23 @@ def get_connections():
 
         # begin new thread for this conn
         thread = threading.Thread(
-            target=handle_client, args=(conn, addr))
+            target=handle_client, args=(conn, addr)
+        )
 
         thread.start()
+
+def send(i, msg):
+    """
+    Send message to specified client connection
+    """
+
+    msg = msg.encode(FORMAT)
+
+    len_msg = str(len(msg)).encode(FORMAT)
+    len_msg += b' ' * (HEADER - len(len_msg))
+
+    conns[i][0].send(len_msg)
+    conns[i][0].send(msg)
 
 # -- game --
 
@@ -190,3 +204,10 @@ def is_valid_play(top, card):
     ]
 
     return True in conditions
+
+# -- logging functions --
+
+def show_deck(n):
+    print(f"\nPlayer {n}'s deck: ")
+    for card in player_decks[n]:
+        print(card)

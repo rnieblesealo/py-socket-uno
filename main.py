@@ -43,6 +43,21 @@ if is_host:
 
     server.start_game()
 
+    while True:
+        server.send(server.player_turn, 'turn')
+
 else:
     client.init()
+
     print('[Client] Connected to server!')
+
+    while True:
+        match(client.recv()):
+            case 'turn':
+                sel = await_input(
+                    msg='Enter your play: ',
+                    valid_entries=('')
+                )
+                pass
+            case '_':
+                pass

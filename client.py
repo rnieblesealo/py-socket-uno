@@ -7,14 +7,26 @@ HEADER = 64
 FORMAT = 'utf-8'
 DISCONNECT_MESSAGE = "!DISCONNECT"
 
+client = None
+
 def init():
-    # start client
+    """
+    Initializes client socket
+    """
+
     global client
 
     client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     client.connect(ADDRESS)
 
 def send(msg):
+    """
+    Sends message to server
+    """
+
+    if client is None:
+        return
+
     # encode msg, get len
     msg = msg.encode(FORMAT)
     msg_len = len(msg)
@@ -26,3 +38,16 @@ def send(msg):
     # send server len; then msg of that len
     client.send(len_msg)
     client.send(msg)
+
+def recv() -> str:
+    if client is None:
+        return ''
+
+    msg_len = None
+    while not msg_len:
+        msg_len = client.recv(HEADER).decode(FORMAT)
+
+    msg_len = int(msg_len)
+    msg = client.recv(msg_len).decode(FORMAT)
+
+    return msg
