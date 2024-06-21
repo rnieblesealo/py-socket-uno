@@ -61,7 +61,7 @@ def recv() -> str:
         return ''
 
     msg_len = None
-    while not msg_len:
+    while msg_len is None:
         msg_len = client.recv(HEADER).decode(FORMAT)
 
     msg_len = int(msg_len)
@@ -79,7 +79,7 @@ def recv_obj():
         return None
 
     obj_size = None
-    while not obj_size:
+    while obj_size is None:
         obj_size = client.recv(HEADER).decode(FORMAT)
 
     obj_size = int(obj_size)

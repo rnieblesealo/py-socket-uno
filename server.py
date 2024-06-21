@@ -12,10 +12,12 @@ SERVER = socket.gethostbyname(socket.gethostname())  # get ipv4 from hostname
 ADDRESS = (SERVER, PORT)
 HEADER = 64
 FORMAT = 'utf-8'
+
 DISCONNECT_MESSAGE = '!DISCONNECT'
 
 server = None
 conns = []
+queue = []
 
 
 def init():
@@ -45,11 +47,11 @@ def handle_client(conn, addr):
         msg_len = int(msg_len)
         msg = conn.recv(msg_len).decode(FORMAT)
 
-        # if (msg == DISCONNECT_MESSAGE):
-        #     connected = False
-        #     break
+        # add received message to queue
+        if msg not in queue:
+            queue.append(msg)
 
-    # conn.close()
+    conn.close()
 
 
 def get_connections():
@@ -71,10 +73,20 @@ def get_connections():
             target=handle_client, args=(conn, addr)
         )
 
+        # put all info into one tuple
+        conns.append((
+            conn,
+            addr,
+            thread
+        ))
+
         thread.start()
 
 
 def send(i, msg):
+    # FIXME: sending unwanted info in len_msg
+    # def an issue with client receive or this send
+    # also happens with pickling :/
     """
     Send message to specified client connection
     """
@@ -176,13 +188,13 @@ def move_card(src, dest, index=-1):
     dest.append(taken)
 
 
-def draw_cards(src, dest, amt):
+def draw_cards(dest, amt):
     """
-    Moves @amt cards from the top of the source to the dest
+    Moves @amt cards from the top of the pool to the dest
     """
 
     for i in range(amt):
-        dest.append(src.pop())
+        dest.append(card_pool.pop())
 
 
 def start_game():
@@ -196,9 +208,10 @@ def start_game():
 
     card_pool = make_pool()
 
+    # add 1 to len of conns to count the host
     for i in range(len(conns)):
         player_decks.append([])
-        draw_cards(card_pool, player_decks[i], START_CARDS)
+        draw_cards(player_decks[i], START_CARDS)
 
     card_stack = [card_pool.pop()]
 
@@ -219,34 +232,132 @@ def start_game():
     print('\n---')
 
 
-def is_valid_play(top, card):
+def update_game():
+    while True:
+        handle_queue()
+
+
+def is_valid_play(card):
     """
-    Evaluates a top card against selected card
+    Evaluates the stack top card against selected card
     Return True if card can be placed after top following UNO rules
 
     """
 
     conditions = [
-        top[0] == card[0],  # top kinds match
-        top[1] == card[1]   # top values match
+        card_stack[-1][0] == card[0],  # kinds match
+        card_stack[-1][0] == card[1]   # values match
     ]
 
     return True in conditions
 
 
-def get_playable_cards(top, deck):
+def get_playable_cards(deck):
     """
     Check all cards in deck against is_valid_play, adding playable indices to a list
     """
 
     playables = []
     for i in range(len(deck)):
-        if is_valid_play(top, deck[i]):
+        if is_valid_play(deck[i]):
             playables.append(i)
     return playables
+
+
+def has_playable_card(deck):
+    """
+    Checks if there is at least 1 playable card that can be played against top
+    More memory-efficient that using len(get_playable_cards)
+    """
+
+    for i in range(len(deck)):
+        if (is_valid_play(deck[i])):
+            return True
+    return False
 
 
 def show_deck(n):
     print(f"\nPlayer {n}'s deck: ")
     for card in player_decks[n]:
         print(card)
+
+
+def feed_deck(deck):
+    """
+    Continues to feed given deck until it has a playable card
+    """
+
+    if (has_playable_card(deck)):
+        print(f"Done feeding player {str(player_turn)}'s deck!")
+        return
+
+    print(f"Feeding player {str(player_turn)}'s deck...")
+
+    draw_cards(deck, 1)
+
+    feed_deck(deck)
+
+
+def move_turn():
+    """
+    Move turn to next player, resetting if reached last one
+    """
+
+    global player_turn
+
+    player_turn = (player_turn + 1) if (player_turn +
+                                        1) < len(player_decks) else 0
+
+
+def handle_queue():
+    global queue
+    global stack
+
+    if queue:
+        event = queue.pop()
+        match(event):
+            case 'give_first_turn':
+                # tell the current player that it's their turn if they're NOT the host
+                send(player_turn, 'turn')
+                pass
+            case 'give_deck':
+                # send player their deck
+                send_obj(
+                    player_turn,
+                    player_decks[player_turn]
+                )
+                pass
+            case 'give_plays':
+                # send player a list of cards they can play too
+                send_obj(
+                    player_turn,
+                    get_playable_cards(player_decks[player_turn])
+                )
+                pass
+            case 'feed_deck':
+                # refeed player deck until they can play a card
+                feed_deck(player_decks[player_turn])
+                send(player_turn, 'done_feeding')
+                pass
+            case 'card_play':
+                # move played card to stack and move turns
+                move_card(player_decks[player_turn], card_stack)
+                move_turn()
+
+                # tell turned player that it's their turn
+                # tell others it's not theirs
+
+                # FIXME: when host sends turn, it's being sent twice
+                # could be an issue with move_turn()
+
+                # FIXME: unpickling error when moving turns
+                # check client-side sends
+
+                for i in range(len(player_decks)):
+                    if i == player_turn:
+                        send(i, 'turn')
+                    else:
+                        send(i, 'not_turn')
+                pass
+            case '_':
+                pass

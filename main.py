@@ -10,7 +10,7 @@ def await_input(msg, valid_entries):
     """
 
     while True:
-        s = input(msg).lower()
+        s = str(input(msg)).lower().strip()
         if s in valid_entries:
             return s
         print("Try again!")
@@ -31,11 +31,14 @@ if is_host:
     # start server and begin scanning for new connections
     server.init()
 
-    thread = threading.Thread(target=server.get_connections)
-    thread.start()
+    get_conns = threading.Thread(target=server.get_connections)
+    get_conns.start()
+
+    # join the host's client
+    client.init()
 
     # start game once host decides so
-    # WARNING: we may still receive new connections at this point, sort this out
+    # FIXME: we may still receive new connections at this point!
     await_input(
         msg="Waiting for connections, enter 'start' to begin game: ",
         valid_entries=('start')
@@ -47,71 +50,74 @@ if is_host:
 
     server.start_game()
 
-    while True:
-        # tell the current player that it's their turn
-        server.send(server.player_turn, 'turn')
+    update_game = threading.Thread(target=server.update_game)
+    update_game.start()
 
-        # send player their deck
-        server.send_obj(
-            server.player_turn,
-            server.player_decks[server.player_turn]
-        )
+    # ask server to give the first turn
+    client.send('give_first_turn')
 
-        # send player a list of cards they can play too
-        server.send_obj(
-            server.player_turn,
-            server.get_playable_cards(
-                server.card_stack[-1],
-                server.player_decks[server.player_turn]
-            )
-        )
-
-
-else:
+# avoid re-initializing host client
+if not is_host:
     client.init()
 
-    while True:
-        match(client.recv()):
-            case 'turn':
-                # get info about my deck
-                my_deck = client.recv_obj()
+while True:
+    match(client.recv()):
+        case 'turn':
+            # get valid plays
+            client.send('give_plays')
 
-                if my_deck is None:
-                    # this shouldn't happen, but TODO add error handing for this
-                    continue
+            my_plays = client.recv_obj()
+            my_plays = pickle.loads(my_plays)
 
-                my_deck = pickle.loads(my_deck)
+            # if no allowed plays, ask server to draw cards into deck
+            # until a valid one's found
+            if len(my_plays) == 0:
+                print('No playable cards!')
 
-                print("\nIt's your turn! Your deck: ")
-                for i in range(len(my_deck)):
-                    print(f'{str(i)}: {my_deck[i]}')
+                client.send('feed_deck')
 
-                # also get indices of valid card plays
-                my_plays = client.recv_obj()
+                while True:
+                    # wait for server to send back confirm
+                    # this is b/c refeeding is in-place operation
+                    if client.recv() == 'done_feeding':
+                        break
 
-                if my_plays is None:
-                    continue
+            # get updated play info
+            client.send('give_plays')
 
-                my_plays = pickle.loads(my_plays)
+            my_plays = client.recv_obj()
+            my_plays = pickle.loads(my_plays)
 
-                # if no allowed plays, ask server to draw cards into this deck until a valid one's found
-                if len(my_plays) == 0:
-                    client.send('out')
+            # get info about my deck
+            # it will be updated if refeed happened
+            client.send('give_deck')
 
-                    # RESUME@: implement a server queue system
+            my_deck = client.recv_obj()
+            my_deck = pickle.loads(my_deck)
 
-                # turn all entries into string format
-                for index in my_plays:
-                    index = str(index)
+            print("\nIt's your turn! Your deck: ")
+            for i in range(len(my_deck)):
+                print(f'{str(i)}: {my_deck[i]}')
 
-                print('\nYou may play these card indices: ')
-                print(str(my_plays))
+            print('\nYou may play these card indices: ')
 
-                sel = await_input(
-                    msg='\nEnter index of card you wanna play: ',
-                    valid_entries=(my_plays)
-                )
+            # turn all entries into string format
+            for i in range(len(my_plays)):
+                my_plays[i] = str(my_plays[i])
+                print(f'{my_plays[i]} ')
 
-                pass
-            case '_':
-                pass
+            # get played card and send it to server
+            sel = await_input(
+                msg='\nEnter index of card you wanna play: ',
+                valid_entries=my_plays
+            )
+
+            client.send('card_play')
+            client.send(sel)
+
+            pass
+        case 'not_turn':
+            print('Awaiting other play...')
+            pass
+        case '_':
+            pass
