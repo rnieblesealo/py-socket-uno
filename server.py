@@ -146,6 +146,8 @@ card_stack = None
 player_turn = 0
 player_decks = []
 
+reversed = True  # which way are the turns going?
+
 
 def make_card(kind, value) -> tuple[str, str]:
     return (
@@ -180,10 +182,13 @@ def move_card(src, dest, index=-1):
     """
     Move a card from a source to a destination
     May specifiy index, otherwise topmost is used
+    Return moved card object
     """
 
     taken = src.pop() if index == -1 else src.pop(index)
     dest.append(taken)
+
+    return taken
 
 
 def draw_cards(dest, amt):
@@ -203,6 +208,7 @@ def start_game():
     global card_pool
     global card_stack
     global player_decks
+    global player_turn
 
     card_pool = make_pool()
 
@@ -214,6 +220,10 @@ def start_game():
         draw_cards(player_decks[i], START_CARDS)
 
     card_stack = [card_pool.pop()]
+
+    # start at last turn if reversed at start
+    if reversed:
+        player_turn = len(player_decks) - 1
 
     print('\nCard pool:\n')
     for card in card_pool:
@@ -259,6 +269,64 @@ def is_valid_play(card):
     return True in conditions
 
 
+def apply_play_consequence(card):
+    """
+    Checks if playing the card has any consequences; if so, execute such consequence
+    The default consequence is just moving turns
+    """
+
+    # YOU WERE HERE !!!
+    # there is an issue with this that blocks turn passing
+    # possibly a problem with the return statement on switch block 2
+
+
+    global reversed
+
+    # if there's no other players, there's no point to doing play consequences
+    if len(player_decks) <= 1:
+        return
+
+    next_player = player_turn + 1 if not reversed else player_turn - 1
+
+    card_kind = card[0]
+    card_value = card[1]
+
+    if card_kind == 'wild':
+        match(card_value):
+            case 'wild':
+                # TODO implement !!!
+                # need some kind of state tracking for this
+                pass
+            case 'draw':
+                # feed the next player 4 cards
+                draw_cards(player_decks[next_player], 4)
+                pass
+            case '_':
+                print('Unrecognized card value')
+                pass
+
+    else:
+        match(card_value):
+            case 'reverse':
+                # toggle state of reverse
+                reversed = not reversed
+                pass
+            case 'draw':
+                # feed next player 2 cards
+                draw_cards(player_decks[next_player], 2)
+                pass
+            case 'skip':
+                # move an extra turn
+                move_turn(2)
+                return
+            case '_':
+                print('Unrecognized card value')
+                pass
+
+    # turn is moved after any consequence
+    move_turn(1)
+
+
 def get_playable_cards(deck):
     """
     Check all cards in deck against is_valid_play, adding playable indices to a list
@@ -289,19 +357,24 @@ def show_deck(n):
         print(card)
 
 
-def move_turn():
+def move_turn(count=1):
     """
-    Move turn to next player, resetting if reached last one
+    Move @count turns,  resetting if reached/went past last one
     """
 
     global player_turn
+    global reversed
 
     old_turn = player_turn
 
-    player_turn = (player_turn + 1) if (player_turn +
-                                        1) < len(player_decks) else 0
+    if reversed:
+        player_turn = player_turn - count if player_turn - \
+            count >= 0 else len(player_decks) - 1
+    else:
+        player_turn = player_turn + count if player_turn + \
+            count < len(player_decks) else 0
 
-    print(f'Moved from turn {str(old_turn)} to {str(player_turn)}; there are {str(len(player_decks))} decks')
+    print(f'Moved from turn {str(old_turn)} to {str(player_turn)}')
 
     # send turn info to other clients
     for i in range(len(player_decks)):
@@ -345,9 +418,17 @@ def handle_queue():
 
                 # play the new card if it's playable
                 if has_playable_card(player_decks[player_turn]):
-                    move_card(player_decks[player_turn], card_stack)
+                    played_card = move_card(
+                        player_decks[player_turn],
+                        card_stack
+                    )
 
-                move_turn()
+                    apply_play_consequence(played_card)
+
+                # if not just move turns
+                else:
+                    move_turn(1)
+
                 pass
             case 'card_play':
                 # await selection from queue, not ideal!
@@ -356,9 +437,14 @@ def handle_queue():
                         sel = queue.pop()
                         break
 
-                # move played card to stack and move turns
-                move_card(player_decks[player_turn], card_stack, int(sel))
-                move_turn()
+                # move played card to stack, apply play consequences
+                played_card = move_card(
+                    player_decks[player_turn],
+                    card_stack,
+                    int(sel)
+                )
+
+                apply_play_consequence(played_card)
                 pass
             case '_':
                 pass

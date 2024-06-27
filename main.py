@@ -76,12 +76,6 @@ while True:
 
                 client.send('no_playables')
 
-                # YOU WERE HERE !!!
-                # doing the above with a single player causes infinite looping
-                # because we're constantly moving turns if no playables
-                # and even if we do score one playable, once we play it, we keep going
-                # until stack is empty :(
-
                 continue
 
             # get updated play info
