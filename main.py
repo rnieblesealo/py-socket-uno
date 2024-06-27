@@ -46,7 +46,7 @@ if is_host:
 
     # when await_input finishes, we will reach this point
 
-    print(f'Starting with {threading.active_count() - 1} player(s)!')
+    print(f'Starting with {len(server.conns)} player(s)!')
 
     server.start_game()
 
@@ -69,18 +69,20 @@ while True:
             my_plays = client.recv_obj()
             my_plays = pickle.loads(my_plays)
 
-            # if no allowed plays, ask server to draw cards into deck
-            # until a valid one's found
+            # feed card into deck, play it if possible, and move turn
+            # play handled server-side
             if len(my_plays) == 0:
                 print('No playable cards!')
 
-                client.send('feed_deck')
+                client.send('no_playables')
 
-                while True:
-                    # wait for server to send back confirm
-                    # this is b/c refeeding is in-place operation
-                    if client.recv() == 'done_feeding':
-                        break
+                # YOU WERE HERE !!!
+                # doing the above with a single player causes infinite looping
+                # because we're constantly moving turns if no playables
+                # and even if we do score one playable, once we play it, we keep going
+                # until stack is empty :(
+
+                continue
 
             # get updated play info
             client.send('give_plays')
@@ -120,4 +122,5 @@ while True:
             print('Awaiting other play...')
             pass
         case '_':
+            print('Default')
             pass

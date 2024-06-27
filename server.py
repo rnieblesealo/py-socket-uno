@@ -66,7 +66,6 @@ def get_connections():
     while True:
         # store conn in arr
         conn, addr = server.accept()
-        conns.append((conn, addr))
 
         # begin new thread for this conn
         thread = threading.Thread(
@@ -80,13 +79,12 @@ def get_connections():
             thread
         ))
 
+        # print(f'Accepted connection @ {str(addr)}, have {len(conns)} connections')
+
         thread.start()
 
 
 def send(i, msg):
-    # FIXME: sending unwanted info in len_msg
-    # def an issue with client receive or this send
-    # also happens with pickling :/
     """
     Send message to specified client connection
     """
@@ -208,6 +206,8 @@ def start_game():
 
     card_pool = make_pool()
 
+    print(len(conns))
+
     # add 1 to len of conns to count the host
     for i in range(len(conns)):
         player_decks.append([])
@@ -244,9 +244,16 @@ def is_valid_play(card):
 
     """
 
+    top_kind = card_stack[-1][0]
+    top_value = card_stack[-1][1]
+
+    card_kind = card[0]
+    card_value = card[1]
+
     conditions = [
-        card_stack[-1][0] == card[0],  # kinds match
-        card_stack[-1][0] == card[1]   # values match
+        card_kind == 'wild',        # wilds are free game
+        top_kind == card_kind,      # kinds (colors) match
+        top_value == card_value     # values match
     ]
 
     return True in conditions
@@ -272,30 +279,14 @@ def has_playable_card(deck):
 
     for i in range(len(deck)):
         if (is_valid_play(deck[i])):
-            return True
-    return False
+            return i
+    return None
 
 
 def show_deck(n):
     print(f"\nPlayer {n}'s deck: ")
     for card in player_decks[n]:
         print(card)
-
-
-def feed_deck(deck):
-    """
-    Continues to feed given deck until it has a playable card
-    """
-
-    if (has_playable_card(deck)):
-        print(f"Done feeding player {str(player_turn)}'s deck!")
-        return
-
-    print(f"Feeding player {str(player_turn)}'s deck...")
-
-    draw_cards(deck, 1)
-
-    feed_deck(deck)
 
 
 def move_turn():
@@ -305,8 +296,19 @@ def move_turn():
 
     global player_turn
 
+    old_turn = player_turn
+
     player_turn = (player_turn + 1) if (player_turn +
                                         1) < len(player_decks) else 0
+
+    print(f'Moved from turn {str(old_turn)} to {str(player_turn)}; there are {str(len(player_decks))} decks')
+
+    # send turn info to other clients
+    for i in range(len(player_decks)):
+        if i == player_turn:
+            send(i, 'turn')
+        else:
+            send(i, 'not_turn')
 
 
 def handle_queue():
@@ -314,7 +316,10 @@ def handle_queue():
     global stack
 
     if queue:
-        event = queue.pop()
+        event = queue.pop(0)  # remove from base of the queue!
+
+        # print(f'Processing event {event}; remaining queue: {str(queue)}')
+
         match(event):
             case 'give_first_turn':
                 # tell the current player that it's their turn if they're NOT the host
@@ -334,30 +339,26 @@ def handle_queue():
                     get_playable_cards(player_decks[player_turn])
                 )
                 pass
-            case 'feed_deck':
-                # refeed player deck until they can play a card
-                feed_deck(player_decks[player_turn])
-                send(player_turn, 'done_feeding')
+            case 'no_playables':
+                # give player one card
+                draw_cards(player_decks[player_turn], 1)
+
+                # play the new card if it's playable
+                if has_playable_card(player_decks[player_turn]):
+                    move_card(player_decks[player_turn], card_stack)
+
+                move_turn()
                 pass
             case 'card_play':
+                # await selection from queue, not ideal!
+                while True:
+                    if queue:
+                        sel = queue.pop()
+                        break
+
                 # move played card to stack and move turns
-                move_card(player_decks[player_turn], card_stack)
+                move_card(player_decks[player_turn], card_stack, int(sel))
                 move_turn()
-
-                # tell turned player that it's their turn
-                # tell others it's not theirs
-
-                # FIXME: when host sends turn, it's being sent twice
-                # could be an issue with move_turn()
-
-                # FIXME: unpickling error when moving turns
-                # check client-side sends
-
-                for i in range(len(player_decks)):
-                    if i == player_turn:
-                        send(i, 'turn')
-                    else:
-                        send(i, 'not_turn')
                 pass
             case '_':
                 pass

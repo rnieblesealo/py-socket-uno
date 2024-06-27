@@ -39,6 +39,8 @@ def send(msg):
     if client is None:
         return
 
+    # print(f'Sending {msg}')
+
     # encode msg, get len
     msg = msg.encode(FORMAT)
     msg_len = len(msg)
