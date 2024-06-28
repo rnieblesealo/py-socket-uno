@@ -275,11 +275,6 @@ def apply_play_consequence(card):
     The default consequence is just moving turns
     """
 
-    # YOU WERE HERE !!!
-    # there is an issue with this that blocks turn passing
-    # possibly a problem with the return statement on switch block 2
-
-
     global reversed
 
     # if there's no other players, there's no point to doing play consequences
@@ -290,6 +285,9 @@ def apply_play_consequence(card):
 
     card_kind = card[0]
     card_value = card[1]
+
+    # set to true when skip takes place
+    skipped_turn = False
 
     if card_kind == 'wild':
         match(card_value):
@@ -317,14 +315,16 @@ def apply_play_consequence(card):
                 pass
             case 'skip':
                 # move an extra turn
+                skipped_turn = True
                 move_turn(2)
-                return
+                pass
             case '_':
                 print('Unrecognized card value')
                 pass
 
-    # turn is moved after any consequence
-    move_turn(1)
+    # move turns after every consequence unless skip took place
+    if not skipped_turn:
+        move_turn(1)
 
 
 def get_playable_cards(deck):
