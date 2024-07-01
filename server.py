@@ -20,15 +20,30 @@ conns = []
 queue = []
 
 
-def init():
+def init() -> int:
     """
     Initialize host server
+    Returns:
+        0 if OK
+        1 if not OK, but will retry
+        2 if not OK, but will not retry
     """
 
     global server
 
-    server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    server.bind(ADDRESS)
+    try:
+        server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        server.bind(ADDRESS)
+        return 0
+    # this one will typically happen if host already in use
+    # we don't want more than 1 host in 1 network, so return will not retry code
+    # but it could happen due to other stuff ?
+    except OSError:
+        return 2
+    # this will happen due to any other failures
+    # then it's ok for us to retry
+    except socket.error:
+        return 1
 
 
 def handle_client(conn, addr):
@@ -36,8 +51,7 @@ def handle_client(conn, addr):
     Listen for messages from a given connection
     """
 
-    connected = True
-    while connected:
+    while True:
         # discard null messages
         msg_len = conn.recv(HEADER).decode(FORMAT)
         if not msg_len:
@@ -46,6 +60,11 @@ def handle_client(conn, addr):
         # receive message
         msg_len = int(msg_len)
         msg = conn.recv(msg_len).decode(FORMAT)
+
+        # close connection on flag
+        if msg == DISCONNECT_MESSAGE:
+            print('Disconnecting player')
+            break
 
         # add received message to queue
         if msg not in queue:
@@ -114,7 +133,9 @@ def send_obj(i, obj):
 # -- game --
 
 
-PLAYERS = 4
+MIN_PLAYERS = 2
+MAX_PLAYERS = 4
+
 START_CARDS = 7
 
 VALUES = (
@@ -147,6 +168,7 @@ player_turn = 0
 player_decks = []
 
 reversed = True  # which way are the turns going?
+winner = -1
 
 
 def make_card(kind, value) -> tuple[str, str]:
@@ -269,11 +291,15 @@ def is_valid_play(card):
     return True in conditions
 
 
-def apply_play_consequence(card):
+def apply_play_consequence(card) -> str:
     """
     Checks if playing the card has any consequences; if so, execute such consequence
     The default consequence is just moving turns
     """
+
+    # YOU WERE HERE
+    # there is some kind of index error that occurs when u autoplay
+    # check that shit out
 
     global reversed
 
@@ -384,9 +410,26 @@ def move_turn(count=1):
             send(i, 'not_turn')
 
 
+def on_win_condition():
+    """
+    Set game parameters according to win conditon
+    """
+
+    # set winner
+    winner = player_turn
+
+    # tell all clients who won
+    for i in range(len(player_decks)):
+        if i == winner:
+            send(i, 'win')
+        else:
+            send(i, 'lose')
+
+
 def handle_queue():
     global queue
     global stack
+    global winner
 
     if queue:
         event = queue.pop(0)  # remove from base of the queue!
@@ -431,7 +474,8 @@ def handle_queue():
 
                 pass
             case 'card_play':
-                # await selection from queue, not ideal!
+                # await selection from queue
+                # not ideal!
                 while True:
                     if queue:
                         sel = queue.pop()
@@ -443,6 +487,12 @@ def handle_queue():
                     card_stack,
                     int(sel)
                 )
+
+                # if moving the played card leaves us with no cards,
+                # game is won
+                if len(player_decks[player_turn]) == 0:
+                    on_win_condition()
+                    pass
 
                 apply_play_consequence(played_card)
                 pass

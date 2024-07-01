@@ -12,23 +12,21 @@ client = None
 
 def init():
     """
-    Initializes client socket
+    Tries to initialize client
+    Returns true if OK, false if error
     """
-
-    global client
 
     # socket behavior is undefined if connect() fails
     # we need to re-create it before retrying!
 
-    while True:
-        try:
-            client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            client.connect(ADDRESS)
-            break
-        except socket.error:
-            continue
+    global client
 
-    print('Connection successful!')
+    try:
+        client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        client.connect(ADDRESS)
+        return True
+    except socket.error:
+        return False
 
 
 def send(msg):

@@ -1,7 +1,9 @@
 import threading
+import random
 import pickle
 import server
 import client
+import sys
 
 
 def await_input(msg, valid_entries):
@@ -28,25 +30,45 @@ sel = await_input(
 is_host = True if sel == 'y' else False
 
 if is_host:
-    # start server and begin scanning for new connections
-    server.init()
+    # try to start the server until OK
+    print('Attempting to start host server...')
+
+    s_state = server.init()
+    while s_state != 0:
+        s_state = server.init()
+
+        if s_state == 2:
+            print('Cannot start host server; another host likely exists. Exiting...')
+            sys.exit()
+
+    print('Started host server!')
 
     get_conns = threading.Thread(target=server.get_connections)
     get_conns.start()
 
-    # join the host's client
-    client.init()
+    # also initialize host client
+    # keep trying until successful
+    print('Attempting to start host client...')
 
-    # start game once host decides so
-    # FIXME: we may still receive new connections at this point!
-    await_input(
-        msg="Waiting for connections, enter 'start' to begin game: ",
-        valid_entries=('start')
-    )
+    connected = client.init()
+    while not connected:
+        connected = client.init()
 
-    # when await_input finishes, we will reach this point
+    print('Started host client!')
 
-    print(f'Starting with {len(server.conns)} player(s)!')
+    # start game once host decides so, as long as we have more than 1 connection
+    while True:
+        sel = await_input(
+            msg="Waiting for connections, enter 'start' to begin game: ",
+            valid_entries=('start')
+        )
+
+        if len(server.conns) > 1:
+            print(f'Starting with {len(server.conns)} player(s)!')
+            break
+        else:
+            print(f'Not enough players! Need {str(server.MIN_PLAYERS)}')
+            print(f'Have {str(len(server.conns))}')
 
     server.start_game()
 
@@ -58,9 +80,18 @@ if is_host:
 
 # avoid re-initializing host client
 if not is_host:
-    client.init()
+    print('OK, looking for game to join instead...')
 
-while True:
+    connected = client.init()
+    while not connected:
+        connected = client.init()
+
+    print('Joined game! Waiting for host to start game...')
+
+in_game = True
+autoplay = True
+
+while in_game:
     match(client.recv()):
         case 'turn':
             # get valid plays
@@ -103,10 +134,16 @@ while True:
                 print(f'{my_plays[i]} ')
 
             # get played card and send it to server
-            sel = await_input(
-                msg='\nEnter index of card you wanna play: ',
-                valid_entries=my_plays
-            )
+            # or generate it if autoplay on
+            sel = None
+            if autoplay:
+                sel = random.choice(my_plays)
+
+            else:
+                sel = await_input(
+                    msg='\nEnter index of card you wanna play: ',
+                    valid_entries=my_plays
+                )
 
             client.send('card_play')
             client.send(sel)
@@ -115,6 +152,14 @@ while True:
         case 'not_turn':
             print('Awaiting other play...')
             pass
+        case 'win':
+            print('YOU WIN !!!')
+            client.send(client.DISCONNECT_MESSAGE)
+            break
+        case 'lose':
+            print('YOU LOSE !!!')
+            client.send(client.DISCONNECT_MESSAGE)
+            break
         case '_':
             print('Default')
             pass
