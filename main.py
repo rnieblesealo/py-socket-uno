@@ -29,6 +29,10 @@ sel = await_input(
 
 is_host = True if sel == 'y' else False
 
+update_game = None
+get_conns = None
+
+
 if is_host:
     # try to start the server until OK
     print('Attempting to start host server...')
@@ -163,3 +167,5 @@ while in_game:
         case '_':
             print('Default')
             pass
+
+client.client.close()

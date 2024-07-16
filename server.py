@@ -216,9 +216,16 @@ def move_card(src, dest, index=-1):
 def draw_cards(dest, amt):
     """
     Moves @amt cards from the top of the pool to the dest
+    If the pool is empty, draw cards from the bottom of stack instead
     """
 
+    if not card_pool:
+        print('Drawing from stack...')
+        dest.append(card_stack.pop(0))
+        return
+
     for i in range(amt):
+        print('Drawing from pool...')
         dest.append(card_pool.pop())
 
 
@@ -297,17 +304,27 @@ def apply_play_consequence(card) -> str:
     The default consequence is just moving turns
     """
 
-    # YOU WERE HERE
-    # there is some kind of index error that occurs when u autoplay
-    # check that shit out
-
     global reversed
 
     # if there's no other players, there's no point to doing play consequences
     if len(player_decks) <= 1:
         return
 
-    next_player = player_turn + 1 if not reversed else player_turn - 1
+    # pick the next player, wrapping around if necessary
+    next_player = -1
+
+    if reversed:
+        if player_turn == len(player_decks):
+            next_player = player_turn - 1
+        elif player_turn == 0:
+            next_player = len(player_decks) - 1
+    else:
+        if player_turn == len(player_decks):
+            next_player = 0
+        elif player_turn == 0:
+            next_player = player_turn + 1
+
+    print(next_player, len(player_decks))
 
     card_kind = card[0]
     card_value = card[1]
@@ -492,7 +509,7 @@ def handle_queue():
                 # game is won
                 if len(player_decks[player_turn]) == 0:
                     on_win_condition()
-                    pass
+                    return
 
                 apply_play_consequence(played_card)
                 pass
